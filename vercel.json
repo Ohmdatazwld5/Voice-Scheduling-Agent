@@ -1,13 +1,19 @@
 {
   "version": 2,
-  "buildCommand": "",
-  "outputDirectory": "frontend",
-  "functions": {
-    "api/index.py": {
-      "runtime": "@vercel/python@3.0.7"
+  "builds": [
+    {
+      "src": "api/index.py",
+      "use": "@vercel/python@3.0.7"
     }
-  },
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/index.py" }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "api/index.py"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/frontend/$1"
+    }
   ]
 }
