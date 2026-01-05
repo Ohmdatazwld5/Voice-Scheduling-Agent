@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional, List
 import os
@@ -12,6 +13,17 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 app = FastAPI(title="Voice Scheduling Agent API")
+
+# Global exception handler - ALL errors return JSON
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=200,  # Return 200 so browser doesn't treat as error
+        content={
+            "status": "error",
+            "message": f"Server Error: {str(exc)}"
+        }
+    )
 
 # CORS configuration
 app.add_middleware(
@@ -92,13 +104,19 @@ async def schedule_meeting(request: ScheduleRequest):
     try:
         # Check if API key is set
         if not GROQ_API_KEY:
-            return {"status": "error", "message": "GROQ_API_KEY not set in environment"}
+            return JSONResponse(status_code=200, content={
+                "status": "error",
+                "message": "GROQ_API_KEY not set in environment"
+            })
         
         # Simple handling for now
         result = extract_meeting_details(request.conversation)
         
         if result.get("error"):
-            return {"status": "error", "message": result.get("message", "Unknown error")}
+            return JSONResponse(status_code=200, content={
+                "status": "error",
+                "message": result.get("message", "Unknown error")
+            })
         
         # Check for missing fields
         missing = []
@@ -108,25 +126,25 @@ async def schedule_meeting(request: ScheduleRequest):
                 missing.append(field)
         
         if missing:
-            return {
+            return JSONResponse(status_code=200, content={
                 "status": "incomplete",
                 "message": f"I need to know: {', '.join(missing)}",
                 "missing_fields": missing,
                 "extracted_data": result
-            }
+            })
         
-        return {
+        return JSONResponse(status_code=200, content={
             "status": "awaiting_confirmation",
             "message": f"I can schedule {result.get('title', 'Meeting')} with {result.get('name')} on {result.get('date')} at {result.get('time')}. Confirm?",
             "meeting": result,
             "extracted_data": result
-        }
+        })
     
     except Exception as e:
-        return {
+        return JSONResponse(status_code=200, content={
             "status": "error",
-            "message": f"Server error: {str(e)}"
-        }
+            "message": f"Error: {str(e)}"
+        })
 
 # Export for Vercel
 handler = app
