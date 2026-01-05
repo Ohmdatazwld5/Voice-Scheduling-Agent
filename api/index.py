@@ -250,7 +250,6 @@ async def schedule(request: Request):
         date = extracted.get("date")
         if not date:
             import re
-            from datetime import datetime, timedelta
             
             # Keywords for relative dates
             if "today" in conversation:
