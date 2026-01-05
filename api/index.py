@@ -95,12 +95,48 @@ async def schedule(request: Request):
         
         date = extracted.get("date")
         if not date:
+            import re
+            from datetime import datetime, timedelta
+            
+            # Keywords for relative dates
             if "today" in conversation:
                 date = "2026-01-05"
             elif "tomorrow" in conversation:
                 date = "2026-01-06"
             elif "next week" in conversation:
                 date = "2026-01-13"
+            else:
+                # Try to parse specific dates like "7th January", "January 7", "Jan 7"
+                months = {
+                    'january': 1, 'jan': 1,
+                    'february': 2, 'feb': 2,
+                    'march': 3, 'mar': 3,
+                    'april': 4, 'apr': 4,
+                    'may': 5,
+                    'june': 6, 'jun': 6,
+                    'july': 7, 'jul': 7,
+                    'august': 8, 'aug': 8,
+                    'september': 9, 'sep': 9, 'sept': 9,
+                    'october': 10, 'oct': 10,
+                    'november': 11, 'nov': 11,
+                    'december': 12, 'dec': 12
+                }
+                
+                # Pattern: "7th January" or "January 7th" or "January 7"
+                for month_name, month_num in months.items():
+                    # Try "7th January" format
+                    match = re.search(rf'(\d{{1,2}})(?:st|nd|rd|th)?\s+{month_name}', conversation, re.IGNORECASE)
+                    if match:
+                        day = int(match.group(1))
+                        date = f"2026-{month_num:02d}-{day:02d}"
+                        break
+                    
+                    # Try "January 7th" format
+                    match = re.search(rf'{month_name}\s+(\d{{1,2}})(?:st|nd|rd|th)?', conversation, re.IGNORECASE)
+                    if match:
+                        day = int(match.group(1))
+                        date = f"2026-{month_num:02d}-{day:02d}"
+                        break
         
         time = extracted.get("time")
         duration = extracted.get("duration", 30)
