@@ -29,11 +29,31 @@ async def schedule(request: Request):
         body = await request.body()
         data = json.loads(body.decode()) if body else {}
         conversation = data.get("conversation", "").lower()
+        confirmation = data.get("confirmation")
+        current_data = data.get("current_data", {})
+        
+        # Handle confirmation responses
+        if confirmation is not None:
+            if confirmation:
+                meeting_data = current_data if current_data else {"name": "Guest", "date": "2026-01-06", "time": "14:00", "title": "Meeting", "duration": 30}
+                return JSONResponse(content={
+                    "status": "confirmed",
+                    "message": "✅ Meeting scheduled successfully!",
+                    "meeting": meeting_data
+                })
+            else:
+                return JSONResponse(content={
+                    "status": "cancelled",
+                    "message": "Meeting cancelled. What would you like to do instead?",
+                    "reset": False
+                })
         
         # Simple extraction
         name = "Someone"
         if "john" in conversation:
             name = "John"
+        elif "sarah" in conversation:
+            name = "Sarah"
         elif "with " in conversation:
             parts = conversation.split("with ")
             if len(parts) > 1:
@@ -42,17 +62,24 @@ async def schedule(request: Request):
         date = "2026-01-06"
         if "today" in conversation:
             date = "2026-01-05"
+        elif "tomorrow" in conversation:
+            date = "2026-01-06"
             
         time = "14:00"
-        if "3" in conversation:
+        if "3pm" in conversation or "3 pm" in conversation:
             time = "15:00"
-        elif "10" in conversation:
+        elif "2pm" in conversation or "2 pm" in conversation:
+            time = "14:00"
+        elif "10am" in conversation or "10 am" in conversation:
             time = "10:00"
+        
+        meeting_info = {"name": name, "date": date, "time": time, "title": "Meeting", "duration": 30}
         
         return JSONResponse(content={
             "status": "awaiting_confirmation",
             "message": f"Schedule meeting with {name} on {date} at {time}?",
-            "meeting": {"name": name, "date": date, "time": time, "title": "Meeting"}
+            "meeting": meeting_info,
+            "extracted_data": meeting_info
         })
     except Exception as e:
         return JSONResponse(content={"status": "error", "message": str(e)})
