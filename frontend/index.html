@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Scheduling Assistant</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 600px;
+            width: 100%;
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2em;
+        }
+        
+        .voice-btn {
+            width: 100%;
+            padding: 25px;
+            font-size: 20px;
+            font-weight: bold;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4);
+        }
+        
+        .voice-btn:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(76, 175, 80, 0.6);
+        }
+        
+        .voice-btn.recording {
+            background: #f44336;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        #transcript {
+            min-height: 120px;
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            margin: 20px 0;
+            background: #f9f9f9;
+        }
+        
+        .message {
+            margin: 10px 0;
+            padding: 10px 15px;
+            border-radius: 8px;
+            line-height: 1.6;
+        }
+        
+        .user-message {
+            background: #e3f2fd;
+            margin-left: 20px;
+        }
+        
+        .assistant-message {
+            background: #f1f8e9;
+            margin-right: 20px;
+        }
+        
+        .message strong {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        #result {
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 12px;
+            display: none;
+        }
+        
+        .success {
+            background: #d4edda;
+            border: 2px solid #c3e6cb;
+            color: #155724;
+        }
+        
+        .incomplete {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            color: #856404;
+        }
+        
+        .error {
+            background: #f8d7da;
+            border: 2px solid #f5c6cb;
+            color: #721c24;
+        }
+        
+        .follow-up {
+            font-size: 18px;
+            font-weight: bold;
+            margin: 15px 0;
+            color: #ff9800;
+        }
+        
+        .meeting-details {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+        
+        .meeting-details p {
+            margin: 10px 0;
+            font-size: 16px;
+        }
+        
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 Voice Scheduling Assistant</h1>
+        
+        <button id="voiceBtn" class="voice-btn">🎙️ Click to Speak</button>
+        
+        <div id="transcript">
+            <p><em>Click the button and say: "Schedule a meeting with John tomorrow at 2pm"</em></p>
+        </div>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+        const voiceBtn = document.getElementById('voiceBtn');
+        const transcript = document.getElementById('transcript');
+        const result = document.getElementById('result');
+
+        let contextData = {};
+        let conversationActive = false;
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        
+        if (!SpeechRecognition) {
+            alert('Speech recognition not supported. Use Chrome or Edge.');
+            voiceBtn.disabled = true;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'en-US';
+        recognition.continuous = false;
+        recognition.interimResults = false;
+
+        let isRecording = false;
+
+        voiceBtn.addEventListener('click', () => {
+            if (!isRecording) {
+                recognition.start();
+            } else {
+                recognition.stop();
+            }
+        });
+
+        recognition.onstart = () => {
+            voiceBtn.textContent = '🔴 Recording... Click to Stop';
+            voiceBtn.classList.add('recording');
+            isRecording = true;
+            result.style.display = 'none';
+        };
+
+        recognition.onresult = (event) => {
+            const speechResult = event.results[0][0].transcript;
+            addMessage('user', speechResult);
+            scheduleFromVoice(speechResult);
+        };
+
+        recognition.onerror = (event) => {
+            transcript.innerHTML = `<p style="color: red;">❌ Error: ${event.error}</p>`;
+            addMessage('error', `Error: ${event.error}`);
+            resetButton();
+        };
+
+        recognition.onend = () => {
+            resetButton();
+        };
+
+        function resetButton() {
+            voiceBtn.textContent = '🎙️ Click to Speak';
+            voiceBtn.classList.remove('recording');
+            isRecording = false;
+        }
+
+        function addMessage(type, text) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}-message`;
+            
+            if (type === 'user') {
+                messageDiv.innerHTML = `<strong>You:</strong> ${text}`;
+            } else if (type === 'assistant') {
+                messageDiv.innerHTML = `<strong>Assistant:</strong> ${text}`;
+            } else {
+                messageDiv.innerHTML = text;
+            }
+            
+            transcript.appendChild(messageDiv);
+            transcript.scrollTop = transcript.scrollHeight;
+        }
+
+        async function scheduleFromVoice(userInput) {
+            try {
+                let conversation = userInput;
+                
+                // If we have context from previous exchange, include it
+                if (Object.keys(contextData).length > 0) {
+                    conversation = `Previous: ${JSON.stringify(contextData)}. Now user says: ${userInput}`;
+                }
+                
+                result.style.display = 'block';
+                result.className = '';
+                result.innerHTML = '<p>⏳ Processing...</p>';
+
+                const requestBody = {
+                    conversation: conversation,
+                    access_token: ""
+                };
+
+                console.log('Request:', requestBody);
+
+                // Use relative URL so it works both locally and when deployed
+                const API_URL = window.location.hostname === 'localhost' && window.location.port === '5500'
+                    ? 'http://127.0.0.1:8000'
+                    : window.location.origin;
+                
+                const response = await fetch(`${API_URL}/schedule`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                console.log('Response status:', response.status);
+
+                const data = await response.json();
+                console.log('Response data:', data);
+
+                if (!response.ok) {
+                    result.className = 'error';
+                    result.innerHTML = `
+                        <p><strong>❌ Error (${response.status}):</strong></p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                    return;
+                }
+
+                if (data.status === 'incomplete') {
+                    // Missing information - show follow-up question
+                    result.className = 'incomplete';
+                    
+                    // Update context
+                    contextData = {...contextData, ...data.extracted_data};
+                    
+                    let partialInfo = '<p><strong>📝 Collected:</strong></p><ul>';
+                    if (data.extracted_data.name !== 'MISSING') partialInfo += `<li>Name: ${data.extracted_data.name}</li>`;
+                    if (data.extracted_data.date !== 'MISSING') partialInfo += `<li>Date: ${data.extracted_data.date}</li>`;
+                    if (data.extracted_data.time !== 'MISSING') partialInfo += `<li>Time: ${data.extracted_data.time}</li>`;
+                    partialInfo += '</ul>';
+                    
+                    result.innerHTML = `
+                        ${partialInfo}
+                        <div class="follow-up">❓ ${data.follow_up_question}</div>
+                        <p style="margin-top: 10px; font-size: 14px;"><em>Click to answer</em></p>
+                    `;
+                    
+                    addMessage('assistant', data.follow_up_question);
+                    
+                } else if (data.error) {
+                    result.className = 'error';
+                    result.innerHTML = `<p><strong>❌ Error:</strong> ${data.error}</p>`;
+                    addMessage('assistant', `Error: ${data.error}`);
+                } else if (data.status === 'success') {
+                    result.className = 'success';
+                    result.innerHTML = `
+                        <h3>✅ Meeting Scheduled!</h3>
+                        <div class="meeting-details">
+                            <p><strong>👤 Name:</strong> ${data.meeting.name}</p>
+                            <p><strong>📅 Date:</strong> ${data.meeting.date}</p>
+                            <p><strong>🕐 Time:</strong> ${data.meeting.time}</p>
+                            <p><strong>📋 Title:</strong> ${data.meeting.title || 'Meeting'}</p>
+                        </div>
+                        <p style="margin-top: 15px;"><em>${data.message || ''}</em></p>
+                    `;
+                    
+                    addMessage('assistant', `Meeting scheduled with ${data.meeting.name} on ${data.meeting.date} at ${data.meeting.time}`);
+                    
+                    // Reset context
+                    contextData = {};
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                result.style.display = 'block';
+                result.className = 'error';
+                result.innerHTML = `<p><strong>❌ Error:</strong> ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>
