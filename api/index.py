@@ -103,17 +103,55 @@ async def schedule(request: Request):
                 date = "2026-01-13"
         
         time = extracted.get("time")
+        duration = extracted.get("duration", 30)
+        
         if not time:
-            if "3pm" in conversation or "3 pm" in conversation:
-                time = "15:00"
-            elif "2pm" in conversation or "2 pm" in conversation or "2:00" in conversation:
-                time = "14:00"
-            elif "10am" in conversation or "10 am" in conversation:
-                time = "10:00"
-            elif "morning" in conversation:
-                time = "09:00"
-            elif "afternoon" in conversation:
-                time = "14:00"
+            # Match various time formats
+            import re
+            
+            # Try to find time patterns like "10:00", "3pm", "3 pm", "10 am", etc.
+            time_patterns = [
+                r'(\d{1,2}):(\d{2})\s*([ap]m)?',  # 10:00, 10:00 AM
+                r'(\d{1,2})\s*([ap]m)',            # 10am, 10 am, 3pm
+            ]
+            
+            for pattern in time_patterns:
+                match = re.search(pattern, conversation, re.IGNORECASE)
+                if match:
+                    hour = int(match.group(1))
+                    minute = match.group(2) if len(match.groups()) > 1 and match.group(2) else "00"
+                    meridiem = match.group(3) if len(match.groups()) > 2 else match.group(2) if len(match.groups()) > 1 else None
+                    
+                    # Convert to 24-hour format
+                    if meridiem:
+                        meridiem = meridiem.lower()
+                        if meridiem == 'pm' and hour != 12:
+                            hour += 12
+                        elif meridiem == 'am' and hour == 12:
+                            hour = 0
+                    
+                    time = f"{hour:02d}:{minute if isinstance(minute, str) else '00'}"
+                    break
+            
+            # Fallback to keyword matching
+            if not time:
+                if "morning" in conversation:
+                    time = "09:00"
+                elif "afternoon" in conversation:
+                    time = "14:00"
+            
+            # Try to detect duration from "X to Y" pattern
+            duration_match = re.search(r'(\d{1,2}):(\d{2}).*?to.*?(\d{1,2}):(\d{2})', conversation)
+            if duration_match:
+                start_hour = int(duration_match.group(1))
+                start_min = int(duration_match.group(2))
+                end_hour = int(duration_match.group(3))
+                end_min = int(duration_match.group(4))
+                
+                # Calculate duration in minutes
+                start_total = start_hour * 60 + start_min
+                end_total = end_hour * 60 + end_min
+                duration = end_total - start_total
         
         # Update extracted with newly found information
         if name:
@@ -122,8 +160,9 @@ async def schedule(request: Request):
             extracted["date"] = date
         if time:
             extracted["time"] = time
+        if duration:
+            extracted["duration"] = duration
         extracted["title"] = "Meeting"
-        extracted["duration"] = 30
         
         # Check what's still missing
         missing = []
