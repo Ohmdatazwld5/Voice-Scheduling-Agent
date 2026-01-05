@@ -120,7 +120,14 @@ async def schedule_meeting(request: ScheduleRequest):
         return {"status": "error", "message": "Unexpected response from AI agent"}
     
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Return JSON error instead of raising HTTPException
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Error in schedule_meeting: {error_details}")  # Log to Vercel
+        return {
+            "status": "error",
+            "message": f"Server error: {str(e)}. Please check if GROQ_API_KEY is set in Vercel environment variables."
+        }
 
 # Export handler for Vercel
 handler = app
