@@ -64,7 +64,7 @@ Extract meeting details and respond ONLY in valid JSON:
 def extract_meeting_details(conversation: str):
     """Extract meeting details using Groq API"""
     if not GROQ_API_KEY:
-        return {"status": "error", "message": "API key not configured"}
+        return {"error": True, "message": "API key not configured"}
     
     messages = [
         {"role": "system", "content": get_system_prompt()},
@@ -85,11 +85,31 @@ def extract_meeting_details(conversation: str):
     
     try:
         response = requests.post(GROQ_URL, json=payload, headers=headers, timeout=10)
-        response.raise_for_status()
-        content = response.json()["choices"][0]["message"]["content"]
-        return json.loads(content)
+        
+        # Check response status
+        if response.status_code != 200:
+            return {
+                "error": True,
+                "message": f"Groq API error ({response.status_code}): {response.text[:100]}"
+            }
+        
+        # Parse JSON response
+        response_json = response.json()
+        content = response_json.get("choices", [{}])[0].get("message", {}).get("content", "")
+        
+        if not content:
+            return {"error": True, "message": "No content from AI"}
+        
+        # Parse the JSON content
+        parsed = json.loads(content)
+        return parsed
+        
+    except json.JSONDecodeError as e:
+        return {"error": True, "message": f"Invalid JSON from AI: {str(e)}"}
+    except requests.exceptions.Timeout:
+        return {"error": True, "message": "Groq API timeout - please try again"}
     except Exception as e:
-        return {"error": True, "message": f"AI Service Error: {str(e)}"}
+        return {"error": True, "message": f"Groq API Error: {str(e)}"}
 
 @app.get("/")
 async def root():
