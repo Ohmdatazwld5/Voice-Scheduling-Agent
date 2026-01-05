@@ -282,7 +282,12 @@
             try {
                 conversationHistory.push(userInput);
 
-                const response = await fetch('http://127.0.0.1:8000/schedule', {
+                // Use production API or local
+                const API_BASE_URL = window.location.hostname === 'localhost' 
+                    ? 'http://127.0.0.1:8000'
+                    : '/api';
+
+                const response = await fetch(`${API_BASE_URL}/schedule`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -418,7 +423,12 @@
 
         async function confirmMeeting(confirmed) {
             try {
-                const response = await fetch('http://127.0.0.1:8000/schedule', {
+                // Use production API or local
+                const API_BASE_URL = window.location.hostname === 'localhost' 
+                    ? 'http://127.0.0.1:8000'
+                    : '/api';
+
+                const response = await fetch(`${API_BASE_URL}/schedule`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
