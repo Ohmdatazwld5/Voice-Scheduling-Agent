@@ -218,6 +218,7 @@ async def schedule(request: Request):
         # Extract NEW information from current message
         name = extracted.get("name")
         if not name:
+            # First check for known names
             if "john" in conversation:
                 name = "John"
             elif "sarah" in conversation:
@@ -226,12 +227,25 @@ async def schedule(request: Request):
                 name = "Rajini"
             elif "kamal" in conversation:
                 name = "Kamal"
+            elif "sadish" in conversation or "satish" in conversation:
+                name = "Sadish"
             elif "with " in conversation:
                 parts = conversation.split("with ")
                 if len(parts) > 1:
                     words = parts[1].replace(".", "").replace(",", "").strip().split()
                     if words:
                         name = words[0].title()
+            else:
+                # If we're expecting a name (previous question was about name), extract it
+                if conversation_history and "who would you like to meet" in str(conversation_history[-1:]).lower():
+                    # Extract first capitalized word or any word that looks like a name
+                    words = conversation.replace(".", "").replace(",", "").strip().split()
+                    for word in words:
+                        # Skip common words
+                        if word.lower() not in ["i", "a", "the", "to", "with", "at", "on", "for", "meeting", "schedule", "book", "minutes", "hour", "am", "pm"]:
+                            if len(word) > 2:  # Name should be at least 3 chars
+                                name = word.title()
+                                break
         
         date = extracted.get("date")
         if not date:
