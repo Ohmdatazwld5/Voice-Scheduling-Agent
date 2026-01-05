@@ -49,7 +49,15 @@ async def schedule(request: Request):
                     "reset": False
                 })
         
-        # Handle voice confirmations (yes/no in conversation)
+        # Detect if user is starting a NEW meeting request (ignore old data)
+        new_meeting_keywords = ["schedule a", "book a", "new meeting", "another meeting", "different time", "available time", "other time"]
+        is_new_request = any(keyword in conversation for keyword in new_meeting_keywords)
+        
+        # If it's a new request, clear old data
+        if is_new_request and current_data:
+            current_data = {}
+        
+        # Handle voice confirmations (yes/no in conversation) - only if we have current_data
         if current_data and ("yes" in conversation or "yeah" in conversation or "sure" in conversation or "confirm" in conversation):
             return JSONResponse(content={
                 "status": "confirmed",
@@ -61,7 +69,7 @@ async def schedule(request: Request):
             return JSONResponse(content={
                 "status": "cancelled",
                 "message": "Meeting cancelled. What would you like to do instead?",
-                "reset": False
+                "reset": True
             })
         
         # Start with existing data or empty dict
@@ -76,10 +84,12 @@ async def schedule(request: Request):
                 name = "Sarah"
             elif "rajini" in conversation:
                 name = "Rajini"
+            elif "kamal" in conversation:
+                name = "Kamal"
             elif "with " in conversation:
                 parts = conversation.split("with ")
                 if len(parts) > 1:
-                    words = parts[1].replace(".", "").strip().split()
+                    words = parts[1].replace(".", "").replace(",", "").strip().split()
                     if words:
                         name = words[0].title()
         

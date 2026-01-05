@@ -433,6 +433,7 @@
             else if (status === 'confirmed') {
                 addMessage('assistant', data.message);
                 showFinalMeeting(data.meeting);
+                resetSession(); // Auto-reset after successful booking
                 resetBtn.style.display = 'block';
             }
             else if (status === 'error') {
