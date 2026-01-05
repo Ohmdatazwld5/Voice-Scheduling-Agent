@@ -1,5 +1,10 @@
 let recognition;
 
+// Detect environment - use relative URL for production
+const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+  ? 'http://127.0.0.1:8000' 
+  : '';
+
 function startListening() {
   const SpeechRecognition =
     window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -13,7 +18,7 @@ function startListening() {
     document.getElementById("output").innerText = transcript;
 
     // Send transcript to backend
-    await fetch("http://127.0.0.1:8000/schedule", {
+    await fetch(`${API_BASE}/api/schedule`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -35,7 +40,7 @@ async function scheduleFromVoice(conversation) {
 
     console.log("Sending to backend:", conversation);
 
-    const response = await fetch("http://127.0.0.1:8000/schedule", {
+    const response = await fetch(`${API_BASE}/api/schedule`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

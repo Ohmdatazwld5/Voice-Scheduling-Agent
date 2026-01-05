@@ -4,26 +4,32 @@
     {
       "src": "api/index.py",
       "use": "@vercel/python"
+    },
+    {
+      "src": "frontend/**",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
     {
       "src": "/api/schedule",
-      "dest": "api/index.py",
-      "methods": ["POST", "OPTIONS"]
+      "dest": "api/index.py"
     },
     {
       "src": "/api/health",
-      "dest": "api/index.py",
-      "methods": ["GET", "OPTIONS"]
+      "dest": "api/index.py"
     },
     {
       "src": "/api/(.*)",
       "dest": "api/index.py"
     },
     {
-      "src": "/(.*)",
+      "src": "/(.*\\.(js|css|ico|png|jpg|svg|html))",
       "dest": "frontend/$1"
+    },
+    {
+      "src": "/",
+      "dest": "frontend/index.html"
     }
   ]
 }
