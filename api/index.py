@@ -64,39 +64,58 @@ async def schedule(request: Request):
                 "reset": False
             })
         
-        # Extract meeting information
-        name = None
-        if "john" in conversation:
-            name = "John"
-        elif "sarah" in conversation:
-            name = "Sarah"
-        elif "with " in conversation:
-            parts = conversation.split("with ")
-            if len(parts) > 1:
-                words = parts[1].split()
-                name = words[0].title() if words else None
+        # Start with existing data or empty dict
+        extracted = current_data.copy() if current_data else {}
         
-        date = None
-        if "today" in conversation:
-            date = "2026-01-05"
-        elif "tomorrow" in conversation:
-            date = "2026-01-06"
-        elif "next week" in conversation:
-            date = "2026-01-13"
-            
-        time = None
-        if "3pm" in conversation or "3 pm" in conversation:
-            time = "15:00"
-        elif "2pm" in conversation or "2 pm" in conversation:
-            time = "14:00"
-        elif "10am" in conversation or "10 am" in conversation:
-            time = "10:00"
-        elif "morning" in conversation:
-            time = "09:00"
-        elif "afternoon" in conversation:
-            time = "14:00"
+        # Extract NEW information from current message
+        name = extracted.get("name")
+        if not name:
+            if "john" in conversation:
+                name = "John"
+            elif "sarah" in conversation:
+                name = "Sarah"
+            elif "rajini" in conversation:
+                name = "Rajini"
+            elif "with " in conversation:
+                parts = conversation.split("with ")
+                if len(parts) > 1:
+                    words = parts[1].replace(".", "").strip().split()
+                    if words:
+                        name = words[0].title()
         
-        # Check what's missing
+        date = extracted.get("date")
+        if not date:
+            if "today" in conversation:
+                date = "2026-01-05"
+            elif "tomorrow" in conversation:
+                date = "2026-01-06"
+            elif "next week" in conversation:
+                date = "2026-01-13"
+        
+        time = extracted.get("time")
+        if not time:
+            if "3pm" in conversation or "3 pm" in conversation:
+                time = "15:00"
+            elif "2pm" in conversation or "2 pm" in conversation or "2:00" in conversation:
+                time = "14:00"
+            elif "10am" in conversation or "10 am" in conversation:
+                time = "10:00"
+            elif "morning" in conversation:
+                time = "09:00"
+            elif "afternoon" in conversation:
+                time = "14:00"
+        
+        # Update extracted with newly found information
+        if name:
+            extracted["name"] = name
+        if date:
+            extracted["date"] = date
+        if time:
+            extracted["time"] = time
+        extracted["title"] = "Meeting"
+        extracted["duration"] = 30
+        
+        # Check what's still missing
         missing = []
         if not name:
             missing.append("name")
@@ -105,16 +124,8 @@ async def schedule(request: Request):
         if not time:
             missing.append("time")
         
-        # If information is incomplete, ask for it
+        # If information is incomplete, ask for next missing piece
         if missing:
-            extracted = {}
-            if name:
-                extracted["name"] = name
-            if date:
-                extracted["date"] = date
-            if time:
-                extracted["time"] = time
-                
             if "name" in missing:
                 return JSONResponse(content={
                     "status": "incomplete",
@@ -135,13 +146,11 @@ async def schedule(request: Request):
                 })
         
         # All information collected, ask for confirmation
-        meeting_info = {"name": name, "date": date, "time": time, "title": "Meeting", "duration": 30}
-        
         return JSONResponse(content={
             "status": "awaiting_confirmation",
             "message": f"I'll schedule a meeting with {name} on {date} at {time}. Should I book it?",
-            "meeting": meeting_info,
-            "extracted_data": meeting_info
+            "meeting": extracted,
+            "extracted_data": extracted
         })
     except Exception as e:
         return JSONResponse(content={"status": "error", "message": str(e)})
