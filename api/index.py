@@ -121,3 +121,6 @@ async def schedule_meeting(request: ScheduleRequest):
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# Export handler for Vercel
+handler = app
