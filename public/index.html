@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Scheduling Assistant</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 700px;
+            width: 100%;
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2em;
+        }
+        
+        .voice-btn {
+            width: 100%;
+            padding: 25px;
+            font-size: 20px;
+            font-weight: bold;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4);
+        }
+        
+        .voice-btn:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(76, 175, 80, 0.6);
+        }
+        
+        .voice-btn.recording {
+            background: #f44336;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        #conversation {
+            min-height: 200px;
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            margin: 20px 0;
+            background: #f9f9f9;
+        }
+        
+        .message {
+            margin: 15px 0;
+            padding: 12px;
+            border-radius: 8px;
+        }
+        
+        .user-message {
+            background: #e3f2fd;
+            border-left: 4px solid #2196F3;
+        }
+        
+        .assistant-message {
+            background: #f3e5f5;
+            border-left: 4px solid #9c27b0;
+        }
+        
+        .message-label {
+            font-weight: bold;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+        
+        .confirmation-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .confirm-btn, .cancel-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .confirm-btn {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .confirm-btn:hover {
+            background: #45a049;
+        }
+        
+        .cancel-btn {
+            background: #f44336;
+            color: white;
+        }
+        
+        .cancel-btn:hover {
+            background: #da190b;
+        }
+        
+        .meeting-details {
+            background: #e8f5e9;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        
+        .meeting-details p {
+            margin: 8px 0;
+            font-size: 15px;
+        }
+        
+        .reset-btn {
+            width: 100%;
+            padding: 12px;
+            margin-top: 15px;
+            background: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        
+        .reset-btn:hover {
+            background: #0b7dda;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .voice-toggle {
+            padding: 10px 20px;
+            background: #9c27b0;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .voice-toggle:hover {
+            background: #7b1fa2;
+        }
+        
+        .voice-toggle.active {
+            background: #4CAF50;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 Voice Scheduling Assistant</h1>
+        
+        <div class="controls">
+            <button id="voiceToggle" class="voice-toggle active">🔊 Voice Output: ON</button>
+        </div>
+        
+        <button id="voiceBtn" class="voice-btn">🎙️ Click to Speak</button>
+        
+        <div id="conversation">
+            <p style="color: #666; text-align: center;"><em>Click the button and say: "Schedule a meeting with John tomorrow at 2pm"</em></p>
+        </div>
+        
+        <button id="resetBtn" class="reset-btn" style="display: none;">🔄 Start New Conversation</button>
+    </div>
+
+    <script>
+        const voiceBtn = document.getElementById('voiceBtn');
+        const conversation = document.getElementById('conversation');
+        const resetBtn = document.getElementById('resetBtn');
+        const voiceToggle = document.getElementById('voiceToggle');
+
+        // Session state
+        let conversationHistory = [];
+        let currentData = null;
+        let awaitingConfirmation = false;
+        let voiceOutputEnabled = true;
+        
+        // Text-to-Speech setup
+        const synth = window.speechSynthesis;
+        let utterance = null;
+
+        // Voice toggle handler
+        voiceToggle.addEventListener('click', () => {
+            voiceOutputEnabled = !voiceOutputEnabled;
+            voiceToggle.textContent = voiceOutputEnabled ? '🔊 Voice Output: ON' : '🔇 Voice Output: OFF';
+            voiceToggle.classList.toggle('active');
+            
+            // Stop any ongoing speech
+            if (!voiceOutputEnabled && synth.speaking) {
+                synth.cancel();
+            }
+        });
+        
+        // Function to speak text
+        function speak(text) {
+            if (!voiceOutputEnabled) return;
+            
+            // Cancel any ongoing speech
+            if (synth.speaking) {
+                synth.cancel();
+            }
+            
+            // Remove HTML tags for cleaner speech
+            const cleanText = text.replace(/<[^>]*>/g, '').replace(/[📅🕐⏱️📋👤✅❌]/g, '');
+            
+            utterance = new SpeechSynthesisUtterance(cleanText);
+            utterance.rate = 0.9;
+            utterance.pitch = 1;
+            utterance.volume = 1;
+            
+            // Use a pleasant voice if available
+            const voices = synth.getVoices();
+            const preferredVoice = voices.find(voice => 
+                voice.name.includes('Female') || voice.name.includes('Samantha') || voice.name.includes('Google')
+            );
+            if (preferredVoice) {
+                utterance.voice = preferredVoice;
+            }
+            
+            synth.speak(utterance);
+        }
+        
+        // Load voices (needed for some browsers)
+        if (synth.onvoiceschanged !== undefined) {
+            synth.onvoiceschanged = () => {
+                synth.getVoices();
+            };
+        }
+        
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        
+        if (!SpeechRecognition) {
+            alert('Speech recognition not supported. Use Chrome or Edge.');
+            voiceBtn.disabled = true;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'en-US';
+        recognition.continuous = false;
+        recognition.interimResults = false;
+
+        let isRecording = false;
+
+        voiceBtn.addEventListener('click', () => {
+            if (!isRecording) {
+                recognition.start();
+            } else {
+                recognition.stop();
+            }
+        });
+
+        recognition.onstart = () => {
+            voiceBtn.textContent = '🔴 Recording... Click to Stop';
+            voiceBtn.classList.add('recording');
+            isRecording = true;
+        };
+
+        recognition.onresult = (event) => {
+            const speechResult = event.results[0][0].transcript;
+            addMessage('user', speechResult);
+            processConversation(speechResult);
+        };
+
+        recognition.onerror = (event) => {
+            addMessage('error', `Error: ${event.error}`);
+            resetButton();
+        };
+
+        recognition.onend = () => {
+            resetButton();
+        };
+
+        function resetButton() {
+            voiceBtn.textContent = '🎙️ Click to Speak';
+            voiceBtn.classList.remove('recording');
+            isRecording = false;
+        }
+
+        function addMessage(type, text) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}-message`;
+            
+            const label = document.createElement('div');
+            label.className = 'message-label';
+            label.textContent = type === 'user' ? 'You:' : 'Assistant:';
+            
+            const content = document.createElement('div');
+            content.innerHTML = text;
+            
+            messageDiv.appendChild(label);
+            messageDiv.appendChild(content);
+            conversation.appendChild(messageDiv);
+            conversation.scrollTop = conversation.scrollHeight;
+            
+            // Speak assistant messages
+            if (type === 'assistant') {
+                speak(text);
+            }
+        }
+
+        // Helper function to calculate end time
+        function calculateEndTime(startTime, durationMinutes) {
+            if (!durationMinutes) return null;
+            
+            const [hours, minutes] = startTime.split(':').map(Number);
+            const startDate = new Date();
+            startDate.setHours(hours, minutes, 0, 0);
+            
+            const endDate = new Date(startDate.getTime() + durationMinutes * 60000);
+            
+            const endHours = String(endDate.getHours()).padStart(2, '0');
+            const endMinutes = String(endDate.getMinutes()).padStart(2, '0');
+            
+            return `${endHours}:${endMinutes}`;
+        }
+
+        // Helper function to format time range
+        function formatTimeRange(startTime, duration) {
+            if (duration) {
+                const endTime = calculateEndTime(startTime, duration);
+                return `${startTime} to ${endTime}`;
+            }
+            return startTime;
+        }
+
+        async function processConversation(userInput) {
+            try {
+                conversationHistory.push(userInput);
+
+                // Use production API or local
+                const API_BASE_URL = window.location.hostname === 'localhost' 
+                    ? 'http://127.0.0.1:8000'
+                    : '/api';
+
+                const response = await fetch(`${API_BASE_URL}/schedule`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        conversation: userInput,
+                        conversation_history: conversationHistory,
+                        current_data: currentData,
+                        access_token: ''
+                    })
+                });
+
+                const data = await response.json();
+                console.log('Backend response:', data);
+
+                handleResponse(data);
+
+            } catch (error) {
+                console.error('Error:', error);
+                addMessage('assistant', `❌ Error: ${error.message}`);
+            }
+        }
+
+        function handleResponse(data) {
+            const status = data.status;
+
+            if (status === 'out_of_scope') {
+                addMessage('assistant', data.message);
+                conversationHistory.push(data.message);
+            }
+            else if (status === 'cancelled') {
+                addMessage('assistant', data.message);
+                if (data.reset) {
+                    resetSession();
+                }
+            }
+            else if (status === 'incomplete') {
+                currentData = data.extracted_data;
+                addMessage('assistant', data.message);
+                conversationHistory.push(data.message);
+                showCollectedInfo(data.extracted_data);
+            }
+            else if (status === 'ambiguous') {
+                currentData = data.extracted_data;
+                addMessage('assistant', data.message);
+                conversationHistory.push(data.message);
+            }
+            else if (status === 'awaiting_confirmation') {
+                currentData = data.extracted_data;
+                awaitingConfirmation = true;
+                showConfirmation(data.meeting, data.message);
+                conversationHistory.push(data.message);
+            }
+            else if (status === 'confirmed') {
+                addMessage('assistant', data.message);
+                showFinalMeeting(data.meeting);
+                resetBtn.style.display = 'block';
+            }
+            else if (status === 'error') {
+                addMessage('assistant', `❌ ${data.message || data.error}`);
+            }
+        }
+
+        function showCollectedInfo(extractedData) {
+            let info = '<div style="background: #fff3cd; padding: 10px; border-radius: 5px; margin-top: 10px;">';
+            info += '<strong>📝 Collected:</strong><br>';
+            
+            if (extractedData.name && extractedData.name !== 'MISSING') {
+                info += `Name: ${extractedData.name}<br>`;
+            }
+            if (extractedData.date && extractedData.date !== 'MISSING') {
+                info += `Date: ${extractedData.date}<br>`;
+            }
+            if (extractedData.time && extractedData.time !== 'MISSING') {
+                const timeDisplay = formatTimeRange(extractedData.time, extractedData.duration);
+                info += `Time: ${timeDisplay}<br>`;
+            }
+            if (extractedData.duration) {
+                info += `Duration: ${extractedData.duration} minutes<br>`;
+            }
+            
+            info += '</div>';
+            
+            const lastMessage = conversation.lastElementChild;
+            if (lastMessage) {
+                lastMessage.innerHTML += info;
+            }
+        }
+
+        function showConfirmation(meeting, confirmationMessage) {
+            let html = `<div>${confirmationMessage}</div>`;
+            html += `<div class="meeting-details">`;
+            html += `<p><strong>👤 Name:</strong> ${meeting.name}</p>`;
+            html += `<p><strong>📅 Date:</strong> ${meeting.date}</p>`;
+            
+            // Show time range if duration exists
+            const timeDisplay = formatTimeRange(meeting.time, meeting.duration);
+            html += `<p><strong>🕐 Time:</strong> ${timeDisplay}</p>`;
+            
+            if (meeting.duration) {
+                html += `<p><strong>⏱️ Duration:</strong> ${meeting.duration} minutes</p>`;
+            }
+            html += `<p><strong>📋 Title:</strong> ${meeting.title}</p>`;
+            html += `</div>`;
+            html += `<div class="confirmation-buttons">
+                <button class="confirm-btn" onclick="confirmMeeting(true)">✅ Yes, Schedule It</button>
+                <button class="cancel-btn" onclick="confirmMeeting(false)">❌ No, Cancel</button>
+            </div>`;
+            
+            addMessage('assistant', html);
+        }
+
+        function showFinalMeeting(meeting) {
+            let html = '<div class="meeting-details">';
+            html += `<p><strong>👤 Name:</strong> ${meeting.name}</p>`;
+            html += `<p><strong>📅 Date:</strong> ${meeting.date}</p>`;
+            
+            // Show time range if duration exists
+            const timeDisplay = formatTimeRange(meeting.time, meeting.duration);
+            html += `<p><strong>🕐 Time:</strong> ${timeDisplay}</p>`;
+            
+            if (meeting.duration) {
+                html += `<p><strong>⏱️ Duration:</strong> ${meeting.duration} minutes</p>`;
+            }
+            html += `<p><strong>📋 Title:</strong> ${meeting.title}</p>`;
+            html += '</div>';
+            
+            const lastMessage = conversation.lastElementChild;
+            if (lastMessage) {
+                lastMessage.innerHTML += html;
+            }
+        }
+
+        async function confirmMeeting(confirmed) {
+            try {
+                // Use production API or local
+                const API_BASE_URL = window.location.hostname === 'localhost' 
+                    ? 'http://127.0.0.1:8000'
+                    : '/api';
+
+                const response = await fetch(`${API_BASE_URL}/schedule`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        conversation: confirmed ? "yes" : "no",
+                        conversation_history: conversationHistory,
+                        current_data: currentData,
+                        confirmation: confirmed,
+                        access_token: ''
+                    })
+                });
+
+                const data = await response.json();
+                console.log('Confirmation response:', data);
+
+                if (data.status === 'confirmed') {
+                    addMessage('assistant', data.message);
+                    showFinalMeeting(data.meeting);
+                    resetBtn.style.display = 'block';
+                } else if (data.status === 'cancelled') {
+                    addMessage('assistant', data.message);
+                    if (data.reset) {
+                        resetSession();
+                    }
+                }
+
+            } catch (error) {
+                console.error('Error:', error);
+                addMessage('assistant', `❌ Error: ${error.message}`);
+            }
+        }
+
+        function resetSession() {
+            conversationHistory = [];
+            currentData = null;
+            awaitingConfirmation = false;
+        }
+
+        resetBtn.addEventListener('click', () => {
+            conversation.innerHTML = '<p style="color: #666; text-align: center;"><em>New conversation started. What would you like to schedule?</em></p>';
+            resetSession();
+            resetBtn.style.display = 'none';
+        });
+
+        // Make confirmMeeting available globally
+        window.confirmMeeting = confirmMeeting;
+    </script>
+</body>
+</html>

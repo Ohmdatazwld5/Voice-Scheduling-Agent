@@ -3,33 +3,13 @@
   "builds": [
     {
       "src": "api/index.py",
-      "use": "@vercel/python@3.0.7"
-    },
-    {
-      "src": "frontend/index.html",
-      "use": "@vercel/static"
+      "use": "@vercel/python"
     }
   ],
   "routes": [
     {
       "src": "/api/(.*)",
       "dest": "api/index.py"
-    },
-    {
-      "src": "/static/(.*)",
-      "dest": "frontend/static/$1"
-    },
-    {
-      "src": "/(.*\\.js|.*\\.css|.*\\.ico|.*\\.png|.*\\.jpg|.*\\.svg)",
-      "dest": "frontend/$1"
-    },
-    {
-      "src": "/",
-      "dest": "frontend/index.html"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "frontend/index.html"
     }
   ]
 }
