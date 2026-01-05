@@ -1,36 +1,22 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
-import sys
 import os
-import traceback
+import json
+import requests
+from datetime import datetime, timedelta
 
-# Add backend to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-
-# Import with error handling
-try:
-    from backend.agent import extract_meeting_details, generate_success_message
-    from backend.models import MeetingRequest
-except Exception as e:
-    print(f"Import Error: {e}")
-    print(traceback.format_exc())
+# Get API key from environment
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 app = FastAPI(title="Voice Scheduling Agent API")
 
 # CORS configuration
-origins = [
-    "http://localhost:5500",
-    "http://127.0.0.1:5500",
-    "https://voice-scheduling-agent.vercel.app",
-    "https://*.vercel.app",
-    "*"
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -43,105 +29,104 @@ class ScheduleRequest(BaseModel):
     current_data: Optional[dict] = None
     confirmation: Optional[bool] = None
 
+def get_system_prompt():
+    """Generate system prompt with current date info"""
+    today = datetime.now()
+    tomorrow = today + timedelta(days=1)
+    
+    return f"""You are a voice scheduling assistant.
+    
+Current Date: {today.strftime('%A, %B %d, %Y')}
+Tomorrow: {tomorrow.strftime('%A, %B %d, %Y')}
+
+Extract meeting details and respond ONLY in valid JSON:
+{{
+  "intent": "SCHEDULE",
+  "name": "person or MISSING",
+  "date": "YYYY-MM-DD or MISSING",
+  "time": "HH:MM or MISSING",
+  "duration": number or null,
+  "title": "meeting title or MISSING"
+}}"""
+
+def extract_meeting_details(conversation: str):
+    """Extract meeting details using Groq API"""
+    if not GROQ_API_KEY:
+        return {"status": "error", "message": "API key not configured"}
+    
+    messages = [
+        {"role": "system", "content": get_system_prompt()},
+        {"role": "user", "content": conversation}
+    ]
+    
+    payload = {
+        "model": "llama-3.3-70b-versatile",
+        "messages": messages,
+        "temperature": 0,
+        "response_format": {"type": "json_object"}
+    }
+    
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        response = requests.post(GROQ_URL, json=payload, headers=headers, timeout=10)
+        response.raise_for_status()
+        content = response.json()["choices"][0]["message"]["content"]
+        return json.loads(content)
+    except Exception as e:
+        return {"error": True, "message": f"AI Service Error: {str(e)}"}
+
 @app.get("/")
 async def root():
-    return {"message": "Voice Scheduling Agent API", "status": "running", "version": "1.0.0"}
+    return {"message": "Voice Scheduling Agent API", "status": "running"}
 
 @app.get("/health")
-async def health_check():
-    return {"status": "healthy", "version": "1.0.0"}
+async def health():
+    return {"status": "healthy", "GROQ_KEY_SET": bool(GROQ_API_KEY)}
 
 @app.post("/schedule")
 async def schedule_meeting(request: ScheduleRequest):
-    # Debug: Check if GROQ_API_KEY is available
-    from backend.config import GROQ_API_KEY
-    if not GROQ_API_KEY:
-        return {
-            "status": "error",
-            "message": "GROQ_API_KEY not found in environment variables. Please check Vercel settings."
-        }
-    
     try:
-        # Handle confirmation
-        if request.confirmation is not None:
-            if request.confirmation and request.current_data:
-                meeting = MeetingRequest(**request.current_data)
-                success_msg = generate_success_message(meeting)
-                return {
-                    "status": "confirmed",
-                    "message": success_msg,
-                    "meeting": request.current_data
-                }
-            else:
-                return {
-                    "status": "cancelled",
-                    "message": "No problem! Let me know if you'd like to schedule a different time.",
-                    "reset": True
-                }
+        # Check if API key is set
+        if not GROQ_API_KEY:
+            return {"status": "error", "message": "GROQ_API_KEY not set in environment"}
         
-        # Extract meeting details
-        result = extract_meeting_details(
-            request.conversation,
-            request.conversation_history,
-            request.current_data
-        )
+        # Simple handling for now
+        result = extract_meeting_details(request.conversation)
         
-        # Handle different response types
         if result.get("error"):
-            return {"status": "error", "message": result["message"]}
+            return {"status": "error", "message": result.get("message", "Unknown error")}
         
-        if result.get("out_of_scope"):
-            return {"status": "out_of_scope", "message": result["message"]}
+        # Check for missing fields
+        missing = []
+        for field in ["name", "date", "time"]:
+            val = result.get(field)
+            if not val or val == "MISSING":
+                missing.append(field)
         
-        if result.get("cancelled"):
-            return {
-                "status": "cancelled",
-                "message": result["message"],
-                "reset": result.get("reset", False)
-            }
-        
-        if result.get("ambiguous_time"):
-            return {
-                "status": "ambiguous",
-                "message": result["message"],
-                "context": result.get("context"),
-                "extracted_data": result.get("extracted_data")
-            }
-        
-        if result.get("incomplete"):
+        if missing:
             return {
                 "status": "incomplete",
-                "message": result["follow_up_question"],
-                "missing_fields": result["missing_fields"],
-                "extracted_data": result["extracted_data"]
+                "message": f"I need to know: {', '.join(missing)}",
+                "missing_fields": missing,
+                "extracted_data": result
             }
         
-        if result.get("awaiting_confirmation"):
-            meeting_dict = {
-                "name": result["meeting"].name,
-                "date": result["meeting"].date,
-                "time": result["meeting"].time,
-                "duration": result["meeting"].duration,
-                "title": result["meeting"].title
-            }
-            return {
-                "status": "awaiting_confirmation",
-                "message": result["confirmation_message"],
-                "meeting": meeting_dict,
-                "extracted_data": result["extracted_data"]
-            }
-        
-        return {"status": "error", "message": "Unexpected response from AI agent"}
+        return {
+            "status": "awaiting_confirmation",
+            "message": f"I can schedule {result.get('title', 'Meeting')} with {result.get('name')} on {result.get('date')} at {result.get('time')}. Confirm?",
+            "meeting": result,
+            "extracted_data": result
+        }
     
     except Exception as e:
-        # Return JSON error instead of raising HTTPException
-        import traceback
-        error_details = traceback.format_exc()
-        print(f"Error in schedule_meeting: {error_details}")  # Log to Vercel
         return {
             "status": "error",
-            "message": f"Server error: {str(e)}. Please check if GROQ_API_KEY is set in Vercel environment variables."
+            "message": f"Server error: {str(e)}"
         }
 
-# Export handler for Vercel
+# Export for Vercel
 handler = app
