@@ -188,10 +188,13 @@ async def schedule(request: Request):
                     "extracted_data": extracted
                 })
             elif "time" in missing:
+                # Suggest available time slots
+                suggested_times = ["9:00 AM", "10:00 AM", "2:00 PM", "3:00 PM", "4:00 PM"]
                 return JSONResponse(content={
                     "status": "incomplete",
-                    "message": "What time works best?",
-                    "extracted_data": extracted
+                    "message": f"What time works best? Here are some available slots: {', '.join(suggested_times)}",
+                    "extracted_data": extracted,
+                    "suggestions": suggested_times
                 })
         
         # All information collected, ask for confirmation
