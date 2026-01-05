@@ -162,11 +162,41 @@
         .reset-btn:hover {
             background: #0b7dda;
         }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .voice-toggle {
+            padding: 10px 20px;
+            background: #9c27b0;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .voice-toggle:hover {
+            background: #7b1fa2;
+        }
+        
+        .voice-toggle.active {
+            background: #4CAF50;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>🎤 Voice Scheduling Assistant</h1>
+        
+        <div class="controls">
+            <button id="voiceToggle" class="voice-toggle active">🔊 Voice Output: ON</button>
+        </div>
         
         <button id="voiceBtn" class="voice-btn">🎙️ Click to Speak</button>
         
@@ -181,12 +211,66 @@
         const voiceBtn = document.getElementById('voiceBtn');
         const conversation = document.getElementById('conversation');
         const resetBtn = document.getElementById('resetBtn');
+        const voiceToggle = document.getElementById('voiceToggle');
 
         // Session state
         let conversationHistory = [];
         let currentData = null;
         let awaitingConfirmation = false;
+        let voiceOutputEnabled = true;
+        
+        // Text-to-Speech setup
+        const synth = window.speechSynthesis;
+        let utterance = null;
 
+        // Voice toggle handler
+        voiceToggle.addEventListener('click', () => {
+            voiceOutputEnabled = !voiceOutputEnabled;
+            voiceToggle.textContent = voiceOutputEnabled ? '🔊 Voice Output: ON' : '🔇 Voice Output: OFF';
+            voiceToggle.classList.toggle('active');
+            
+            // Stop any ongoing speech
+            if (!voiceOutputEnabled && synth.speaking) {
+                synth.cancel();
+            }
+        });
+        
+        // Function to speak text
+        function speak(text) {
+            if (!voiceOutputEnabled) return;
+            
+            // Cancel any ongoing speech
+            if (synth.speaking) {
+                synth.cancel();
+            }
+            
+            // Remove HTML tags for cleaner speech
+            const cleanText = text.replace(/<[^>]*>/g, '').replace(/[📅🕐⏱️📋👤✅❌]/g, '');
+            
+            utterance = new SpeechSynthesisUtterance(cleanText);
+            utterance.rate = 0.9;
+            utterance.pitch = 1;
+            utterance.volume = 1;
+            
+            // Use a pleasant voice if available
+            const voices = synth.getVoices();
+            const preferredVoice = voices.find(voice => 
+                voice.name.includes('Female') || voice.name.includes('Samantha') || voice.name.includes('Google')
+            );
+            if (preferredVoice) {
+                utterance.voice = preferredVoice;
+            }
+            
+            synth.speak(utterance);
+        }
+        
+        // Load voices (needed for some browsers)
+        if (synth.onvoiceschanged !== undefined) {
+            synth.onvoiceschanged = () => {
+                synth.getVoices();
+            };
+        }
+        
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         
         if (!SpeechRecognition) {
@@ -251,6 +335,11 @@
             messageDiv.appendChild(content);
             conversation.appendChild(messageDiv);
             conversation.scrollTop = conversation.scrollHeight;
+            
+            // Speak assistant messages
+            if (type === 'assistant') {
+                speak(text);
+            }
         }
 
         // Helper function to calculate end time

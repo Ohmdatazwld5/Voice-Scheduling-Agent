@@ -197,22 +197,24 @@ def extract_meeting_details(conversation: str, conversation_history: list = None
                 merged_data[key] = new_value
         extracted_data = merged_data
     
-    # Handle ambiguous time
+    # Handle ambiguous time with multiple suggestions
     time_value = extracted_data.get("time", "MISSING")
     if time_value and isinstance(time_value, str) and time_value.startswith("AMBIGUOUS:"):
         context = time_value.split(":")[1]
-        suggestions = {
-            "evening": "6:00 PM",
-            "noon": "12:00 PM",
-            "morning": "9:00 AM",
-            "afternoon": "2:00 PM"
+        suggestions_map = {
+            "evening": ["5:00 PM", "6:00 PM", "7:00 PM"],
+            "noon": ["12:00 PM", "12:30 PM", "1:00 PM"],
+            "morning": ["9:00 AM", "10:00 AM", "11:00 AM"],
+            "afternoon": ["2:00 PM", "3:00 PM", "4:00 PM"]
         }
-        suggested_time = suggestions.get(context, "6:00 PM")
+        time_suggestions = suggestions_map.get(context, ["6:00 PM", "7:00 PM", "8:00 PM"])
+        
         return {
             "ambiguous_time": True,
             "context": context,
+            "suggestions": time_suggestions,
             "extracted_data": extracted_data,
-            "message": f"By {context}, do you mean around {suggested_time}? Or would you prefer a different time?"
+            "message": f"I have availability in the {context}. Would {time_suggestions[0]}, {time_suggestions[1]}, or {time_suggestions[2]} work better for you?"
         }
     
     # Check for missing information
