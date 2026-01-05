@@ -17,7 +17,7 @@ app.add_middleware(
 @app.get("/api")
 @app.get("/api/")
 def root():
-    return JSONResponse(content={"status": "ok"})
+    return JSONResponse(content={"message": "API Working", "status": "ok"})
 
 @app.get("/api/health")
 def health():
