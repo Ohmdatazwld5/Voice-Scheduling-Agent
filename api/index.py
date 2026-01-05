@@ -4,12 +4,18 @@ from pydantic import BaseModel
 from typing import Optional, List
 import sys
 import os
+import traceback
 
 # Add backend to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from backend.agent import extract_meeting_details, generate_success_message
-from backend.models import MeetingRequest
+# Import with error handling
+try:
+    from backend.agent import extract_meeting_details, generate_success_message
+    from backend.models import MeetingRequest
+except Exception as e:
+    print(f"Import Error: {e}")
+    print(traceback.format_exc())
 
 app = FastAPI(title="Voice Scheduling Agent API")
 
@@ -47,6 +53,14 @@ async def health_check():
 
 @app.post("/schedule")
 async def schedule_meeting(request: ScheduleRequest):
+    # Debug: Check if GROQ_API_KEY is available
+    from backend.config import GROQ_API_KEY
+    if not GROQ_API_KEY:
+        return {
+            "status": "error",
+            "message": "GROQ_API_KEY not found in environment variables. Please check Vercel settings."
+        }
+    
     try:
         # Handle confirmation
         if request.confirmation is not None:
