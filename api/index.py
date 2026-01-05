@@ -1,9 +1,17 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 import json
+import os
+from datetime import datetime, timedelta
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import Flow
+from googleapiclient.discovery import build
 
 app = FastAPI()
+
+# In-memory storage for tokens (for demo - use database in production)
+user_tokens = {}
 
 app.add_middleware(
     CORSMiddleware,
@@ -23,6 +31,79 @@ def root():
 def health():
     return JSONResponse(content={"status": "healthy"})
 
+@app.get("/api/auth/google")
+async def google_auth():
+    """Initiate Google OAuth flow"""
+    try:
+        # Create OAuth credentials from environment
+        client_config = {
+            "web": {
+                "client_id": os.getenv("GOOGLE_CLIENT_ID"),
+                "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
+                "redirect_uris": [os.getenv("REDIRECT_URI", "https://voice-scheduling-agent-7exx.vercel.app/api/auth/callback")],
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token"
+            }
+        }
+        
+        flow = Flow.from_client_config(
+            client_config,
+            scopes=["https://www.googleapis.com/auth/calendar"],
+            redirect_uri=client_config["web"]["redirect_uris"][0]
+        )
+        
+        auth_url, state = flow.authorization_url(
+            access_type='offline',
+            include_granted_scopes='true',
+            prompt='consent'
+        )
+        
+        return JSONResponse(content={"auth_url": auth_url, "state": state})
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+@app.get("/api/auth/callback")
+async def google_callback(code: str = None, state: str = None):
+    """Handle Google OAuth callback"""
+    try:
+        if not code:
+            return JSONResponse(content={"error": "No code provided"}, status_code=400)
+        
+        client_config = {
+            "web": {
+                "client_id": os.getenv("GOOGLE_CLIENT_ID"),
+                "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
+                "redirect_uris": [os.getenv("REDIRECT_URI", "https://voice-scheduling-agent-7exx.vercel.app/api/auth/callback")],
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token"
+            }
+        }
+        
+        flow = Flow.from_client_config(
+            client_config,
+            scopes=["https://www.googleapis.com/auth/calendar"],
+            redirect_uri=client_config["web"]["redirect_uris"][0]
+        )
+        
+        flow.fetch_token(code=code)
+        credentials = flow.credentials
+        
+        # Store token (use session ID in production)
+        token_data = {
+            "token": credentials.token,
+            "refresh_token": credentials.refresh_token,
+            "token_uri": credentials.token_uri,
+            "client_id": credentials.client_id,
+            "client_secret": credentials.client_secret,
+            "scopes": credentials.scopes
+        }
+        user_tokens["default_user"] = token_data
+        
+        # Redirect back to app with success
+        return RedirectResponse(url="/?auth=success")
+    except Exception as e:
+        return RedirectResponse(url=f"/?auth=error&message={str(e)}")
+
 @app.post("/api/schedule")
 async def schedule(request: Request):
     try:
@@ -37,6 +118,65 @@ async def schedule(request: Request):
         if confirmation is not None:
             if confirmation:
                 meeting_data = current_data if current_data else {"name": "Guest", "date": "2026-01-06", "time": "14:00", "title": "Meeting", "duration": 30}
+                
+                # Try to create actual Google Calendar event
+                calendar_event = None
+                if "default_user" in user_tokens:
+                    try:
+                        token_data = user_tokens["default_user"]
+                        credentials = Credentials(
+                            token=token_data["token"],
+                            refresh_token=token_data.get("refresh_token"),
+                            token_uri=token_data["token_uri"],
+                            client_id=token_data["client_id"],
+                            client_secret=token_data["client_secret"],
+                            scopes=token_data["scopes"]
+                        )
+                        
+                        service = build("calendar", "v3", credentials=credentials)
+                        
+                        # Create event
+                        start_datetime = datetime.fromisoformat(f"{meeting_data['date']}T{meeting_data['time']}")
+                        end_datetime = start_datetime + timedelta(minutes=meeting_data.get('duration', 30))
+                        
+                        event = {
+                            "summary": meeting_data.get("title", "Meeting"),
+                            "description": f"Scheduled with {meeting_data['name']}",
+                            "start": {
+                                "dateTime": start_datetime.isoformat(),
+                                "timeZone": "America/New_York",
+                            },
+                            "end": {
+                                "dateTime": end_datetime.isoformat(),
+                                "timeZone": "America/New_York",
+                            },
+                        }
+                        
+                        calendar_event = service.events().insert(calendarId="primary", body=event).execute()
+                        
+                        return JSONResponse(content={
+                            "status": "confirmed",
+                            "message": "✅ Meeting scheduled successfully in Google Calendar!",
+                            "meeting": meeting_data,
+                            "calendar_link": calendar_event.get("htmlLink")
+                        })
+                    except Exception as e:
+                        # If calendar creation fails, still confirm but show error
+                        return JSONResponse(content={
+                            "status": "confirmed",
+                            "message": f"✅ Meeting confirmed, but couldn't add to Google Calendar: {str(e)}. Please connect your Google Calendar.",
+                            "meeting": meeting_data,
+                            "needs_auth": True
+                        })
+                else:
+                    # No Google auth yet
+                    return JSONResponse(content={
+                        "status": "confirmed",
+                        "message": "✅ Meeting confirmed! Connect Google Calendar to add it automatically.",
+                        "meeting": meeting_data,
+                        "needs_auth": True
+                    })
+                
                 return JSONResponse(content={
                     "status": "confirmed",
                     "message": "✅ Meeting scheduled successfully!",

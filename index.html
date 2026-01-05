@@ -196,6 +196,7 @@
         
         <div class="controls">
             <button id="voiceToggle" class="voice-toggle active">🔊 Voice Output: ON</button>
+            <button id="googleAuth" class="google-auth-btn" style="background: #4285f4; color: white; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; margin-left: 10px;">📅 Connect Google Calendar</button>
         </div>
         
         <button id="voiceBtn" class="voice-btn">🎙️ Click to Speak</button>
@@ -212,12 +213,44 @@
         const conversation = document.getElementById('conversation');
         const resetBtn = document.getElementById('resetBtn');
         const voiceToggle = document.getElementById('voiceToggle');
+        const googleAuth = document.getElementById('googleAuth');
 
         // Session state
         let conversationHistory = [];
         let currentData = null;
         let awaitingConfirmation = false;
         let voiceOutputEnabled = true;
+        
+        // Check if user returned from OAuth
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('auth') === 'success') {
+            alert('✅ Google Calendar connected successfully!');
+            window.history.replaceState({}, document.title, "/");
+        } else if (urlParams.get('auth') === 'error') {
+            alert('❌ Failed to connect Google Calendar: ' + urlParams.get('message'));
+            window.history.replaceState({}, document.title, "/");
+        }
+        
+        // Google Auth handler
+        googleAuth.addEventListener('click', async () => {
+            try {
+                const API_BASE_URL = window.location.hostname === 'localhost' 
+                    ? 'http://127.0.0.1:8000'
+                    : '';
+                    
+                const response = await fetch(`${API_BASE_URL}/api/auth/google`);
+                const data = await response.json();
+                
+                if (data.auth_url) {
+                    window.location.href = data.auth_url;
+                } else {
+                    alert('Failed to initiate Google auth');
+                }
+            } catch (error) {
+                console.error('Auth error:', error);
+                alert('Failed to connect Google Calendar');
+            }
+        });
         
         // Text-to-Speech setup
         const synth = window.speechSynthesis;
