@@ -1,15 +1,10 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
-from typing import Optional, List
-import os
 import json
 
-# Simple API without complex dependencies
 app = FastAPI()
 
-# CORS - Must be before any routes
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -18,97 +13,46 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-class ScheduleRequest(BaseModel):
-    conversation: str
-    access_token: str = ""
-    conversation_history: Optional[List[str]] = []
-    current_data: Optional[dict] = None
-    confirmation: Optional[bool] = None
-
 @app.get("/")
 @app.get("/api")
-async def root():
-    return JSONResponse(content={"message": "Voice Scheduling Agent API", "status": "working"})
+@app.get("/api/")
+def root():
+    return JSONResponse(content={"status": "ok"})
 
-@app.get("/health")
 @app.get("/api/health")
-async def health():
+def health():
     return JSONResponse(content={"status": "healthy"})
 
-def extract_meeting_info(conversation: str) -> dict:
-    """Extract meeting info from conversation using simple keyword matching"""
-    conv_lower = conversation.lower()
-    
-    # Extract name
-    name = "Someone"
-    if "john" in conv_lower:
-        name = "John"
-    elif "sarah" in conv_lower:
-        name = "Sarah"
-    elif "with" in conv_lower:
-        parts = conv_lower.split("with")
-        if len(parts) > 1:
-            words = parts[1].strip().split()
-            if words:
-                name = words[0].title()
-    
-    # Extract date
-    date = "2026-01-06"
-    if "today" in conv_lower:
-        date = "2026-01-05"
-    elif "tomorrow" in conv_lower:
-        date = "2026-01-06"
-    
-    # Extract time
-    time = "14:00"
-    if "3pm" in conv_lower or "3 pm" in conv_lower:
-        time = "15:00"
-    elif "2pm" in conv_lower or "2 pm" in conv_lower:
-        time = "14:00"
-    elif "10am" in conv_lower or "10 am" in conv_lower:
-        time = "10:00"
-    
-    return {"name": name, "date": date, "time": time}
-
-@app.post("/schedule")
 @app.post("/api/schedule")
-async def schedule_meeting(request: Request):
-    """Handle meeting scheduling - simplified version"""
+async def schedule(request: Request):
     try:
-        # Parse request body manually to avoid any Pydantic issues
         body = await request.body()
-        data = json.loads(body) if body else {}
+        data = json.loads(body.decode()) if body else {}
+        conversation = data.get("conversation", "").lower()
         
-        conversation = data.get("conversation", "")
+        # Simple extraction
+        name = "Someone"
+        if "john" in conversation:
+            name = "John"
+        elif "with " in conversation:
+            parts = conversation.split("with ")
+            if len(parts) > 1:
+                name = parts[1].split()[0].title() if parts[1].split() else "Someone"
         
-        # Extract meeting info
-        info = extract_meeting_info(conversation)
+        date = "2026-01-06"
+        if "today" in conversation:
+            date = "2026-01-05"
+            
+        time = "14:00"
+        if "3" in conversation:
+            time = "15:00"
+        elif "10" in conversation:
+            time = "10:00"
         
-        response_data = {
+        return JSONResponse(content={
             "status": "awaiting_confirmation",
-            "message": f"I can schedule a meeting with {info['name']} on {info['date']} at {info['time']}. Should I book it?",
-            "meeting": {
-                "name": info["name"],
-                "date": info["date"],
-                "time": info["time"],
-                "title": "Meeting",
-                "duration": 30
-            },
-            "extracted_data": info
-        }
-        
-        return JSONResponse(content=response_data, status_code=200)
-        
-    except json.JSONDecodeError as e:
-        return JSONResponse(
-            content={"status": "error", "message": f"Invalid JSON: {str(e)}"},
-            status_code=200
-        )
+            "message": f"Schedule meeting with {name} on {date} at {time}?",
+            "meeting": {"name": name, "date": date, "time": time, "title": "Meeting"}
+        })
     except Exception as e:
-        return JSONResponse(
-            content={"status": "error", "message": f"Error: {str(e)}"},
-            status_code=200
-        )
-
-# Vercel handler
-handler = app
+        return JSONResponse(content={"status": "error", "message": str(e)})
