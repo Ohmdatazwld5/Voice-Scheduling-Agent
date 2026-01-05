@@ -6,3 +6,4 @@ class MeetingRequest(BaseModel):
     date: str
     time: str
     title: Optional[str] = "Meeting"
+    duration: Optional[int] = None  # User can specify duration, no default
